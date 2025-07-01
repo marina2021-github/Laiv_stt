@@ -1,2 +1,6 @@
 streamlit
 pandas
+streamlit
+openai-whisper
+torch
+ffmpeg-python
