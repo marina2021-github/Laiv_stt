@@ -3,54 +3,56 @@
 # 만약 안되면 로컬 PC나 Docker로 실행 권장
 
 import streamlit as st
-import whisper
 import tempfile
 import os
+from faster_whisper import WhisperModel
 
-st.set_page_config(page_title="STT Admin Console", layout="wide")
+# 페이지 설정
+st.set_page_config(page_title="STT Demo: Whisper + Streamlit", layout="centered")
 
-# Sidebar
-with st.sidebar:
-    st.markdown("##STT Admin Console")
-    st.markdown("1. **Audio Upload**\n텍스트로 변환할 음성 파일 업로드 (mp3, wav)")
-    st.markdown("2. **Model Setting**\n변환할 모델 및 언어 선택")
-    st.markdown("3. **Transcription Result**\n결과 확인 및 다운로드")
-    st.button("Log Data")  # 기능 추가 가능
+# 타이틀 및 소개
+st.title("🎙️ STT Demo: Whisper + Streamlit")
+st.markdown("### 📤 Upload Audio File")
+st.markdown("Only .wav or .mp3 files")
 
-# Header
-st.markdown("###Upload Audio File")
-uploaded_file = st.file_uploader("Drag and drop an audio file here", type=["mp3", "wav"])
+# 파일 업로드
+uploaded_file = st.file_uploader("Drag and drop an audio file here", type=["wav", "mp3"])
 
-# Model Settings
-st.markdown("###STT Model Setting")
-col1, col2, col3, col4 = st.columns(4)
+# 모델 설정 옵션
+st.markdown("### ⚙️ Model Settings")
+model_size = st.selectbox("Model", ["tiny", "base", "small", "medium", "large"], index=1)
+language_option = st.selectbox("Language", ["Auto", "en", "ko", "ja", "zh", "fr", "de"], index=0)
 
-with col1:
-    model_name = st.selectbox("Model", ["tiny", "base", "small", "medium", "large"], index=1)
-with col2:
-    language = st.selectbox("Language", ["Auto", "en", "ko", "ja"])
-with col3:
-    beam_size = st.selectbox("Beam Size", [1, 3, 5, 10], index=2)
-with col4:
-    noise_suppression = st.selectbox("Noise Suppression", ["None", "Aggressive", "Light"], index=1)
+# 모델 로딩 함수
+@st.cache_resource
+def load_model(model_size):
+    return WhisperModel(model_size, compute_type="float32")
 
-# Transcription Result
-if uploaded_file:
-    st.markdown("###Transcription")
-    if st.button("변환"):
-        with st.spinner("Transcribing..."):
-            try:
-                model = whisper.load_model(model_name)
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
-                    tmp.write(uploaded_file.read())
-                    tmp_path = tmp.name
-                result = model.transcribe(tmp_path, language=None if language == "Auto" else language, beam_size=beam_size)
-                transcription = result["text"]
+# 변환 버튼
+if uploaded_file and st.button("🎧 Transcribe"):
+    with st.spinner("Loading model and transcribing..."):
+        # 임시 파일로 저장
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
+            tmp_file.write(uploaded_file.read())
+            tmp_path = tmp_file.name
 
-                edited_text = st.text_area("Transcribed Text", transcription, height=200)
-                st.download_button("다운로드", edited_text, file_name="transcription.txt")
-            except Exception as e:
-                st.error(f"Error during transcription: {e}")
-else:
-    st.info("음성 파일을 업로드하세요.")
+        # 모델 로딩
+        model = load_model(model_size)
 
+        # 언어 설정
+        lang_code = None if language_option == "Auto" else language_option
+
+        try:
+            # 추론
+            segments, info = model.transcribe(tmp_path, language=lang_code)
+
+            # 결과 출력
+            st.markdown("### 📝 Transcription Result")
+            full_text = " ".join([seg.text for seg in segments])
+            st.text_area("Transcription", full_text, height=300)
+
+        except Exception as e:
+            st.error(f"Transcription failed: {e}")
+
+        finally:
+            os.remove(tmp_path)
