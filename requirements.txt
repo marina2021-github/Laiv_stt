@@ -2,3 +2,4 @@ streamlit
 faster-whisper
 torch
 ffmpeg-python
+numpy
